@@ -328,11 +328,7 @@ This architecture demonstrates:
 
 ---
 
-## 📋 **Portfolio Talking Points**
-
-This architecture provides excellent interview examples:
-
-> *"I designed an end-to-end healthcare claims lakehouse on Azure using the medallion architecture pattern. The system processes millions of claims daily through both batch and streaming pipelines, with comprehensive data quality validation and real-time dashboards. I implemented CDC for claim status updates, built dimensional models for analytics, and established monitoring with Azure Monitor."*
+## 📋 **Technical Implementation**
 
 **Key Technical Skills:**
 - Azure service integration and orchestration

@@ -5,7 +5,7 @@
 [![Delta Lake](https://img.shields.io/badge/Delta_Lake-0078D4?style=for-the-badge&logo=apache-spark&logoColor=white)](https://delta.io)
 [![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=for-the-badge&logo=power-bi&logoColor=black)](https://powerbi.microsoft.com)
 
-> 🎯 **Portfolio Project**: End-to-end Azure data engineering platform showcasing batch + streaming processing, data quality, analytics engineering, and business intelligence for healthcare claims processing.
+> **Project Overview**: End-to-end Azure data engineering platform showcasing batch + streaming processing, data quality, analytics engineering, and business intelligence for healthcare claims processing.
 
 ## 🏆 **What This Demonstrates**
 
