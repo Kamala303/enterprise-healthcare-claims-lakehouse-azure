@@ -136,14 +136,6 @@ cd enterprise-healthcare-claims-lakehouse-azure
 | **Power BI** | [app.powerbi.com](https://app.powerbi.com) | Executive dashboards |
 | **Synapse** | [web.azuresynapse.net](https://web.azuresynapse.net) | SQL analytics |
 
-## 🎨 **Screenshots & Demos**
-
-*Dashboard designs and layouts are available in the `dashboard/` folder with detailed KPI definitions and Power BI layout specifications.*
-
-## 📋 **Interview Talking Points**
-
-> *"I built an end-to-end healthcare claims lakehouse platform on Azure that processes healthcare claims through both batch and streaming pipelines. The system uses ADF for orchestration, Databricks for batch and streaming processing with Delta Lake, and publishes curated data to Synapse for analytics. I implemented comprehensive data quality with automated validation, built executive Power BI dashboards, and established monitoring with Azure Monitor. The platform demonstrates scalable architecture and modern data engineering practices."*
-
 ## 🔧 **Technical Challenges Solved**
 
 - **🔄 CDC Implementation**: Used MERGE operations to handle claim status changes
