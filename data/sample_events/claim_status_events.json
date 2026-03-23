@@ -1,0 +1,90 @@
+[
+  {
+    "event_id": "EVT1001",
+    "claim_id": "C1002",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "PAID",
+    "denial_reason": "",
+    "event_timestamp": "2026-03-23T14:22:10Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1002",
+    "claim_id": "C1003",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "DENIED",
+    "denial_reason": "INVALID_PROCEDURE_CODE",
+    "event_timestamp": "2026-03-23T15:45:30Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1003",
+    "claim_id": "C1007",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PAID",
+    "new_status": "ADJUSTED",
+    "denial_reason": "",
+    "event_timestamp": "2026-03-23T16:12:45Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1004",
+    "claim_id": "C1010",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "DENIED",
+    "denial_reason": "MISSING_REFERRAL",
+    "event_timestamp": "2026-03-23T17:30:15Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1005",
+    "claim_id": "C1014",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PAID",
+    "new_status": "ADJUSTED",
+    "denial_reason": "",
+    "event_timestamp": "2026-03-23T18:05:22Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1006",
+    "claim_id": "C1015",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "DENIED",
+    "denial_reason": "SERVICE_NOT_COVERED",
+    "event_timestamp": "2026-03-23T19:18:33Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1007",
+    "claim_id": "C1019",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "DENIED",
+    "denial_reason": "DUPLICATE_CLAIM",
+    "event_timestamp": "2026-03-23T20:42:11Z",
+    "source_system": "adjudication_engine"
+  },
+  {
+    "event_id": "EVT1008",
+    "claim_id": "C1001",
+    "claim_line_id": "CL1",
+    "event_type": "STATUS_UPDATE",
+    "old_status": "PENDING",
+    "new_status": "PAID",
+    "denial_reason": "",
+    "event_timestamp": "2026-03-23T21:15:48Z",
+    "source_system": "adjudication_engine"
+  }
+]

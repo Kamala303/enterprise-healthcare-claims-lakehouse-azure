@@ -1,0 +1,293 @@
+{
+  "name": "pl_ingest_healthcare_batch_files",
+  "properties": {
+    "description": "Ingests daily healthcare batch files from source systems to ADLS raw zone",
+    "activities": [
+      {
+        "name": "Get_Metadata_Source_Files",
+        "type": "GetMetadata",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "ds_source_files_list",
+            "type": "DatasetReference"
+          },
+          "fieldList": [
+            "childItems",
+            "itemName"
+          ],
+          "storeSettings": {
+            "type": "AzureBlobFSReadSettings",
+            "recursive": true,
+            "wildcardFileName": "*.csv",
+            "enablePartitionDiscovery": false
+          }
+        }
+      },
+      {
+        "name": "Filter_Healthcare_Files",
+        "type": "Filter",
+        "dependsOn": [
+          {
+            "activity": "Get_Metadata_Source_Files",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('Get_Metadata_Source_Files').output.childItems",
+            "type": "Expression"
+          },
+          "condition": {
+            "value": "@contains(item().name, '.csv')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ForEach_Healthcare_File",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "Filter_Healthcare_Files",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@activity('Filter_Healthcare_Files').output.value",
+            "type": "Expression"
+          },
+          "isSequential": false,
+          "batchCount": 5,
+          "activities": [
+            {
+              "name": "Copy_File_to_ADLS",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "7.00:00:00",
+                "retry": 3,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "source": {
+                  "type": "DelimitedTextSource",
+                  "storeSettings": {
+                    "type": "AzureBlobStorageReadSettings",
+                    "recursive": true,
+                    "wildcardFileName": {
+                      "value": "@item().name",
+                      "type": "Expression"
+                    }
+                  },
+                  "formatSettings": {
+                    "type": "DelimitedTextReadSettings"
+                  }
+                },
+                "sink": {
+                  "type": "DelimitedTextSink",
+                  "storeSettings": {
+                    "type": "AzureBlobFSWriteSettings"
+                  },
+                  "formatSettings": {
+                    "type": "DelimitedTextWriteSettings",
+                    "quoteAllText": true,
+                    "fileExtension": ".csv"
+                  }
+                },
+                "enableStaging": false,
+                "translator": {
+                  "type": "TabularTranslator",
+                  "typeConversion": true,
+                  "typeConversionSettings": {
+                    "allowDataTruncation": true,
+                    "treatBooleanAsNumber": false
+                  }
+                }
+              },
+              "inputs": [
+                {
+                  "referenceName": "ds_source_healthcare_files",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "fileName": {
+                      "value": "@item().name",
+                      "type": "Expression"
+                    }
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "ds_adls_raw_healthcare",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "folderPath": {
+                      "value": "@if(contains(item().name, 'claims'), 'claims', if(contains(item().name, 'members'), 'members', if(contains(item().name, 'providers'), 'providers', if(contains(item().name, 'diagnosis'), 'diagnosis_ref', if(contains(item().name, 'procedure'), 'procedure_ref', 'payer_ref'))))",
+                      "type": "Expression"
+                    },
+                    "fileName": {
+                      "value": "@item().name",
+                      "type": "Expression"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Log_File_Ingestion",
+              "type": "StoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "Copy_File_to_ADLS",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "7.00:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "usp_log_file_ingestion",
+                "storedProcedureParameters": {
+                  "fileName": {
+                    "value": "@item().name",
+                    "type": "String"
+                  },
+                  "filePath": {
+                    "value": "@item().name",
+                    "type": "String"
+                  },
+                  "fileSize": {
+                    "value": "@item().length",
+                    "type": "Int64"
+                  },
+                  "pipelineRunId": {
+                    "value": "@pipeline().RunId",
+                    "type": "String"
+                  },
+                  "ingestionTimestamp": {
+                    "value": "@utcnow()",
+                    "type": "String"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_synapse_analytics",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Validate_Ingestion_Complete",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "ForEach_Healthcare_File",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_adls_gen2",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Spark",
+              "script": "dbutils.fs.ls('/mnt/healthcare-lakehouse/raw/')"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Trigger_Databricks_Job",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Validate_Ingestion_Complete",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "7.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/01_bronze_claims_ingestion",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@pipeline().RunId",
+              "type": "Expression"
+            }
+          }
+        }
+      }
+    ],
+    "annotations": [],
+    "lastPublishTime": "2026-03-23T14:00:00Z",
+    "variables": {
+      "sourceContainer": {
+        "type": "String",
+        "defaultValue": "healthcare-source"
+      },
+      "targetContainer": {
+        "type": "String",
+        "defaultValue": "lakehouse"
+      }
+    },
+    "concurrency": 1
+  }
+}

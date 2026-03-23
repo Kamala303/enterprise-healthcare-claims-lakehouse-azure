@@ -1,0 +1,598 @@
+{
+  "name": "pl_run_databricks_medallion_jobs",
+  "properties": {
+    "description": "Orchestrates Databricks medallion architecture jobs from Bronze to Gold",
+    "activities": [
+      {
+        "name": "Check_Bronze_Data_Ready",
+        "type": "Script",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Spark",
+              "script": "dbutils.fs.ls('/mnt/healthcare-lakehouse/bronze/')"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Run_Bronze_Claims_Ingestion",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Check_Bronze_Data_Ready",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 300,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/01_bronze_claims_ingestion",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('BRONZE_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Bronze_Members_Ingestion",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Check_Bronze_Data_Ready",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 300,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/02_bronze_members_ingestion",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('BRONZE_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Bronze_Providers_Ingestion",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Check_Bronze_Data_Ready",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 300,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/03_bronze_providers_ingestion",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('BRONZE_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Bronze_Reference_Ingestion",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Check_Bronze_Data_Ready",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 300,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/04_bronze_reference_ingestion",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('BRONZE_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Wait_For_All_Bronze_Jobs",
+        "type": "WaitOnCompletion",
+        "dependsOn": [
+          {
+            "activity": "Run_Bronze_Claims_Ingestion",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Members_Ingestion",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Providers_Ingestion",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Reference_Ingestion",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {}
+      },
+      {
+        "name": "Run_Silver_Claims_Transform",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Wait_For_All_Bronze_Jobs",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "3.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/05_silver_claims_transform",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('SILVER_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Claim_Status_Merge",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Run_Silver_Claims_Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/08_claim_status_merge",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('SILVER_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Gold_Dimensions",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Run_Claim_Status_Merge",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/10_build_gold_dimensions",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('GOLD_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Gold_Fact_Claims",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Run_Gold_Dimensions",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "3.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/11_build_gold_fact_claims",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('GOLD_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_Gold_Marts",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Run_Gold_Fact_Claims",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/12_build_gold_marts",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('GOLD_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Publish_to_Synapse",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Run_Gold_Marts",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 600,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/13_publish_gold_to_synapse",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('SYNAPSE_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Run_dbt_Transformations",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Publish_to_Synapse",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 1,
+          "retryIntervalInSeconds": 300,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/Shared/Healthcare_Lakehouse/run_dbt_models",
+          "baseParameters": {
+            "pipeline_run_id": {
+              "value": "@concat('DBT_', pipeline().RunId)",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Log_Pipeline_Success",
+        "type": "StoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "Run_dbt_Transformations",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.30:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "usp_log_pipeline_execution",
+          "storedProcedureParameters": {
+            "pipelineName": {
+              "value": "pl_run_databricks_medallion_jobs",
+              "type": "String"
+            },
+            "pipelineRunId": {
+              "value": "@pipeline().RunId",
+              "type": "String"
+            },
+            "status": {
+              "value": "SUCCESS",
+              "type": "String"
+            },
+            "executionTime": {
+              "value": "@utcnow()",
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_synapse_analytics",
+          "type": "LinkedServiceReference"
+        }
+      },
+      {
+        "name": "Log_Pipeline_Failure",
+        "type": "StoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "Run_Bronze_Claims_Ingestion",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Members_Ingestion",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Providers_Ingestion",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Bronze_Reference_Ingestion",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Silver_Claims_Transform",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Claim_Status_Merge",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Gold_Dimensions",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Gold_Fact_Claims",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_Gold_Marts",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Publish_to_Synapse",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          },
+          {
+            "activity": "Run_dbt_Transformations",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.30:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "usp_log_pipeline_execution",
+          "storedProcedureParameters": {
+            "pipelineName": {
+              "value": "pl_run_databricks_medallion_jobs",
+              "type": "String"
+            },
+            "pipelineRunId": {
+              "value": "@pipeline().RunId",
+              "type": "String"
+            },
+            "status": {
+              "value": "FAILED",
+              "type": "String"
+            },
+            "executionTime": {
+              "value": "@utcnow()",
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_synapse_analytics",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "lastPublishTime": "2026-03-23T14:30:00Z",
+    "variables": {
+      "databricksJobTimeout": {
+        "type": "String",
+        "defaultValue": "PT2H"
+      },
+      "maxRetryCount": {
+        "type": "String",
+        "defaultValue": "3"
+      }
+    },
+    "concurrency": 1
+  }
+}

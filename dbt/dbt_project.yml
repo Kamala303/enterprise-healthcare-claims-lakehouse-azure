@@ -1,0 +1,51 @@
+name: 'healthcare_lakehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'healthcare_lakehouse'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+models:
+  healthcare_lakehouse:
+    # Configures models for the analytics schema
+    analytics:
+      +materialized: table
+      +schema: analytics
+      
+    # Staging models - raw data from Gold layer
+    staging:
+      +materialized: view
+      +schema: staging
+      
+    # Dimension models - conformed dimensions
+    dimensions:
+      +materialized: table
+      +schema: dimensions
+      
+    # Mart models - business-focused analytical tables
+    marts:
+      +materialized: table
+      +schema: marts
+
+# Quoting configuration
+quoting:
+  identifier: false
+  schema: false
+
+# On-run-start and on-run-end hooks
+on-run-start:
+  - "{{ create_analytics_schema() }}"
+
+on-run-end:
+  - "{{ grant_usage_to_analytics_role() }}"

@@ -1,0 +1,404 @@
+{
+  "name": "pl_pipeline_audit_monitoring",
+  "properties": {
+    "description": "Monitors pipeline health, data quality, and sends alerts for anomalies",
+    "activities": [
+      {
+        "name": "Check_Data_Quality_Results",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlSource",
+            "sqlReaderQuery": "SELECT table_name, rule_name, AVG(pass_rate) as avg_pass_rate, SUM(failed_count) as total_failures, MAX(run_timestamp) as last_check_time FROM analytics.data_quality_results WHERE run_timestamp >= DATEADD(hour, -24, GETDATE()) GROUP BY table_name, rule_name HAVING AVG(pass_rate) < 95.0 OR SUM(failed_count) > 100"
+          },
+          "dataset": {
+            "referenceName": "ds_synapse_analytics",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "Check_Pipeline_Execution_Health",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlSource",
+            "sqlReaderQuery": "SELECT pipeline_name, COUNT(*) as total_runs, SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) as failed_runs, MAX(start_time) as last_run_time, AVG(DATEDIFF(minute, start_time, end_time)) as avg_duration_minutes FROM audit.pipeline_runs WHERE start_time >= DATEADD(hour, -24, GETDATE()) GROUP BY pipeline_name HAVING SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) > 0 OR AVG(DATEDIFF(minute, start_time, end_time)) > 120"
+          },
+          "dataset": {
+            "referenceName": "ds_synapse_analytics",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "Check_Stream_Health",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlSource",
+            "sqlReaderQuery": "SELECT COUNT(*) as stalled_streams FROM audit.stream_monitoring WHERE last_event_time < DATEADD(minute, -30, GETDATE()) OR is_active = 0"
+          },
+          "dataset": {
+            "referenceName": "ds_synapse_analytics",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "Check_Data_Volume_Anomalies",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "1.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "SqlSource",
+            "sqlReaderQuery": "SELECT table_name, record_count, avg_record_count, deviation_percent FROM audit.row_counts WHERE deviation_percent > 50 OR record_count = 0 AND run_date >= DATEADD(day, -1, GETDATE())"
+          },
+          "dataset": {
+            "referenceName": "ds_synapse_analytics",
+            "type": "DatasetReference"
+          }
+        }
+      },
+      {
+        "name": "Evaluate_Alert_Conditions",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "Check_Data_Quality_Results",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Check_Pipeline_Execution_Health",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Check_Stream_Health",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          },
+          {
+            "activity": "Check_Data_Volume_Anomalies",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.30:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(greater(activity('Check_Data_Quality_Results').output.firstRow.count, 0), greater(activity('Check_Pipeline_Execution_Health').output.firstRow.count, 0), greater(activity('Check_Stream_Health').output.firstRow.stalled_streams, 0), greater(activity('Check_Data_Volume_Anomalies').output.firstRow.count, 0))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Prepare_Alert_Message",
+              "type": "SetVariable",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.30:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "variableName": "alertMessage",
+                "value": {
+                  "value": "@concat('Healthcare Lakehouse Alert\\n\\nData Quality Issues: ', activity('Check_Data_Quality_Results').output.firstRow.count, '\\nPipeline Failures: ', activity('Check_Pipeline_Execution_Health').output.firstRow.failed_runs, '\\nStream Issues: ', activity('Check_Stream_Health').output.firstRow.stalled_streams, '\\nData Volume Anomalies: ', activity('Check_Data_Volume_Anomalies').output.firstRow.count, '\\n\\nTimestamp: ', utcnow())",
+                  "type": "Expression"
+                }
+              },
+              "variables": [
+                {
+                  "name": "alertMessage",
+                  "type": "String"
+                }
+              ]
+            },
+            {
+              "name": "Send_Email_Alert",
+              "type": "Web",
+              "dependsOn": [
+                {
+                  "activity": "Prepare_Alert_Message",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.30:00:00",
+                "retry": 2,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "linkedServiceName": {
+                "referenceName": "ls_logic_app_alerts",
+                "type": "LinkedServiceReference"
+              },
+              "typeProperties": {
+                "url": {
+                  "value": "@variables('logicAppAlertUrl')",
+                  "type": "String"
+                },
+                "method": "POST",
+                "body": {
+                  "value": "@json(concat('{\"subject\": \"Healthcare Lakehouse System Alert\", \"message\": \"', variables('alertMessage'), '\", \"severity\": \"High\", \"timestamp\": \"', utcnow(), '\"}'))",
+                  "type": "Expression"
+                },
+                "headers": {
+                  "Content-Type": "application/json"
+                }
+              }
+            },
+            {
+              "name": "Log_Alert_Sent",
+              "type": "StoredProcedure",
+              "dependsOn": [
+                {
+                  "activity": "Send_Email_Alert",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "policy": {
+                "timeout": "0.30:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "usp_log_system_alert",
+                "storedProcedureParameters": {
+                  "alertType": {
+                    "value": "SYSTEM_HEALTH",
+                    "type": "String"
+                  },
+                  "alertMessage": {
+                    "value": "@variables('alertMessage')",
+                    "type": "String"
+                  },
+                  "severity": {
+                    "value": "HIGH",
+                    "type": "String"
+                  },
+                  "pipelineRunId": {
+                    "value": "@pipeline().RunId",
+                    "type": "String"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_synapse_analytics",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "name": "Log_Healthy_Status",
+              "type": "StoredProcedure",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.30:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30,
+                "secureOutput": false,
+                "secureInput": false
+              },
+              "userProperties": [],
+              "typeProperties": {
+                "storedProcedureName": "usp_log_system_health",
+                "storedProcedureParameters": {
+                  "healthStatus": {
+                    "value": "HEALTHY",
+                    "type": "String"
+                  },
+                  "dataQualityScore": {
+                    "value": "100",
+                    "type": "String"
+                  },
+                  "pipelineSuccessRate": {
+                    "value": "100",
+                    "type": "String"
+                  },
+                  "streamStatus": {
+                    "value": "ACTIVE",
+                    "type": "String"
+                  },
+                  "pipelineRunId": {
+                    "value": "@pipeline().RunId",
+                    "type": "String"
+                  }
+                }
+              },
+              "linkedServiceName": {
+                "referenceName": "ls_synapse_analytics",
+                "type": "LinkedServiceReference"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Generate_Health_Report",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "Evaluate_Alert_Conditions",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "2.00:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "linkedServiceName": {
+          "referenceName": "ls_databricks_workspace",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Spark",
+              "script": "import pandas as pd\nfrom datetime import datetime\n\n# Generate health report\nhealth_report = {\n    'timestamp': datetime.now().isoformat(),\n    'pipeline_run_id': '@{pipeline().RunId}',\n    'data_quality_issues': @activity('Check_Data_Quality_Results').output.firstRow.count,\n    'pipeline_failures': @activity('Check_Pipeline_Execution_Health').output.firstRow.failed_runs,\n    'stream_issues': @activity('Check_Stream_Health').output.firstRow.stalled_streams,\n    'data_volume_anomalies': @activity('Check_Data_Volume_Anomalies').output.firstRow.count,\n    'overall_health': 'HEALTHY' if @or(greater(activity('Check_Data_Quality_Results').output.firstRow.count, 0), greater(activity('Check_Pipeline_Execution_Health').output.firstRow.count, 0), greater(activity('Check_Stream_Health').output.firstRow.stalled_streams, 0), greater(activity('Check_Data_Volume_Anomalies').output.firstRow.count, 0)) else 'HEALTHY'\n}\n\n# Save report to ADLS\ndbutils.fs.put('/mnt/healthcare-lakehouse/audit/health_reports/health_report_@{formatDateTime(utcnow(), 'yyyyMMdd_HHmmss')}.json', json.dumps(health_report), True)"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Update_Dashboard_Metrics",
+        "type": "StoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "Generate_Health_Report",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.30:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "storedProcedureName": "usp_update_dashboard_metrics",
+          "storedProcedureParameters": {
+            "dataQualityScore": {
+              "value": "@if(greater(activity('Check_Data_Quality_Results').output.firstRow.count, 0), 85, 100)",
+              "type": "String"
+            },
+            "pipelineSuccessRate": {
+              "value": "@if(greater(activity('Check_Pipeline_Execution_Health').output.firstRow.failed_runs, 0), 75, 100)",
+              "type": "String"
+            },
+            "streamHealth": {
+              "value": "@if(greater(activity('Check_Stream_Health').output.firstRow.stalled_streams, 0), 50, 100)",
+              "type": "String"
+            },
+            "dataVolumeHealth": {
+              "value": "@if(greater(activity('Check_Data_Volume_Anomalies').output.firstRow.count, 0), 80, 100)",
+              "type": "String"
+            },
+            "overallHealth": {
+              "value": "@if(greater(activity('Check_Data_Quality_Results').output.firstRow.count, 0), 'WARNING', 'HEALTHY')",
+              "type": "String"
+            }
+          }
+        },
+        "linkedServiceName": {
+          "referenceName": "ls_synapse_analytics",
+          "type": "LinkedServiceReference"
+        }
+      }
+    ],
+    "annotations": [],
+    "lastPublishTime": "2026-03-23T15:00:00Z",
+    "variables": {
+      "alertMessage": {
+        "type": "String"
+      },
+      "logicAppAlertUrl": {
+        "type": "String",
+        "defaultValue": "https://prod-00.eastus.logic.azure.com:443/workflows/healthcare-alerts/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=example"
+      },
+      "dataQualityThreshold": {
+        "type": "String",
+        "defaultValue": "95.0"
+      },
+      "pipelineFailureThreshold": {
+        "type": "String",
+        "defaultValue": "0"
+      },
+      "streamHealthThreshold": {
+        "type": "String",
+        "defaultValue": "0"
+      }
+    },
+    "concurrency": 1
+  }
+}
